@@ -1,4 +1,3 @@
-## import
 import os
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -39,10 +38,8 @@ utils_ops.tf = tf.compat.v1
 tf.gfile = tf.io.gfile
 print("[INFO] TF verion = ", tf.__version__)
 
-##################
-###############
-## DEPTH ##
-## define
+
+"""DEPTH define"""
 global xCenter
 global yCenter
 global body_z
@@ -57,17 +54,16 @@ weapon_z = 0
 diff = 0
 r_z = 0
 l_z = 0
-####
 
-# default state를 safe로 설정하고 이를 초록글자(?)로 표시함
+
+# default state를 safe로 설정하고 이를 초록글자로 표시함
 global color
 color = (0, 255, 0)
 global current_state
 current_state = "safe"
 
 
-## skeleton ##
-###
+""" skeleton """
 # skeletonization을 위한 색상 설정
 SKELETON_COLORS = [pygame.color.THECOLORS["red"],
                    pygame.color.THECOLORS["blue"],
@@ -87,12 +83,13 @@ array_ly = []
 array_lz = []
 
 
-### 소켓 통신 부분
+""" socket """
 from socket import *
 s = socket(AF_INET, SOCK_DGRAM)
 s.bind(('',0))
 
-##location##
+
+""" location """
 import os
 from dotenv import load_dotenv
 load_dotenv(verbose=True)
@@ -104,20 +101,19 @@ info = {
     'considerIp': True,
 }
 
-### date time ###
+
+
+""" date, time, situation_description, videostream, loaction """
 import datetime
 import json
 import requests
 
-
-## date, time, situation_description, videostream, loaction
 result = requests.post(url, info)
 info = result.json()
 lat = info['location']['lat']
 long = info['location']['lng']
 now = datetime.datetime.now()
 nowDatetime = now.strftime('%Y-%m-%d %H:%M:%S')
-# print(nowDatetime)  # 2015-04-19 12:11:32
 
 total_info = {
     "addr": {
@@ -127,7 +123,7 @@ total_info = {
     "DateTime": nowDatetime
 }
 
-#휴대폰 3대에 전송하는 것이다.
+#휴대폰 3대에 전송
 host_temp = ['192.168.0.44','192.168.0.75','192.168.0.59']
 
 global cnt
@@ -136,7 +132,7 @@ cnt = 0
 # web browser
 from flask import Flask, render_template, Response
 
-## gpu 제어
+""" GPU 제어 """
 gpus = tf.config.experimental.list_physical_devices('GPU')
 if gpus:
     # Restrict TensorFlow to only allocate 1GB of memory on the first GPU
@@ -151,11 +147,10 @@ if gpus:
         print(e)
 
 
-########## classifier
-# classifier = load_model('C:/Users/IVPL-D14/models/research/object_detection/knife_bat_0219re.h5')
+""" classifier """
 classifier = load_model('C:/Users/IVPL-D14/models/research/object_detection/knife_bat_0225.h5')
 classifier.summary()
-# summary() : 해당 모델의 요약정보를 출력하는 것. (e.g. layer마다 dimention이나 매개변수 개수정보 출력)
+# summary() : 해당 모델의 요약정보 출력
 
 img_width, img_height = 224, 224  # Default input size for VGG16
 # Instantiate convolutional base
@@ -164,7 +159,7 @@ from keras.applications import VGG16
 conv_base = VGG16(weights='imagenet',
                   include_top=False,
                   input_shape=(img_width, img_height, 3))
-###
+
 
 app = Flask(__name__)
 
@@ -174,9 +169,8 @@ def index():
     return render_template('/index.html')
 
 
-## 모델 가져오기
+""" 모델 가져오기 """
 def load_model_(model_name):
-    # model_dir = 'C:/Users/IVPL-D14/models/research/object_detection/local_models/'+model_name
     model_dir = 'C:/Users/IVPL-D14/FineTunedModels/' + model_name
     model_dir = pathlib.Path(model_dir) / "saved_model"
     print('[INFO] Loading the model from ' + str(model_dir))
@@ -184,7 +178,7 @@ def load_model_(model_name):
     return model
 
 
-# PATH_TO_LABELS = 'C:/Users/IVPL-D14/models/research/object_detection/local_models/knife_label_map.pbtxt'
+
 PATH_TO_LABELS = 'C:/Users/IVPL-D14/models/research/object_detection/training/weapon_labelmap.pbtxt'
 category_index = label_map_util.create_category_index_from_labelmap(PATH_TO_LABELS)  # , use_display_name=True)
 # model_name = 'trained_model_large_original_15000'
@@ -215,36 +209,27 @@ model_name = 'training_kb_batch8_eff0_0202_arranged_fintuned_model'  # knife인�
 
 print('[INFO] Downloading model and loading to network : ' + model_name)
 detection_model = load_model_(model_name)
-# detection_model.signatures['serving_default'] : forward pass
 detection_model.signatures['serving_default'].output_dtypes
 detection_model.signatures['serving_default'].output_shapes
 
 
-# inference : trained model을 저장(배포)한다는 의미...
-
-# SavedModel에는 가중치 및 연산을 포함한 완전한 텐서플로 프로그램이 포함된다.
-
 def run_inference_for_single_image(model, image):
     image = np.asarray(image)  # (태스트용) 이미지를 numpy array로 변경
-    # The input needs to be a tensor, convert it using `tf.convert_to_tensor`.
     input_tensor = tf.convert_to_tensor(image)  # numpy array 형태의 이미지를 tensor로 변경
-    # The model expects a batch of images, so add an axis with `tf.newaxis`.
     input_tensor = input_tensor[tf.newaxis, ...]
+
     # Run inference
     model_fn = model.signatures['serving_default']  # forward pass
     output_dict = model_fn(input_tensor)
-    # All outputs are batches tensors.
-    # Convert to numpy arrays, and take index [0] to remove the batch dimension.
-    # We're only interested in the first num_detections.
+
     num_detections = int(output_dict.pop('num_detections'))
     output_dict = {key: value[0, :num_detections].numpy()
                    for key, value in output_dict.items()}
     output_dict['num_detections'] = num_detections
-    # detection_classes should be ints.
+
     output_dict['detection_classes'] = output_dict['detection_classes'].astype(np.int64)
-    # Handle models with masks:
+
     if 'detection_masks' in output_dict:
-        # Reframe the the bbox mask to the image size.
         detection_masks_reframed = utils_ops.reframe_box_masks_to_image_masks(
             output_dict['detection_masks'], output_dict['detection_boxes'],
             image.shape[0], image.shape[1])
@@ -254,7 +239,7 @@ def run_inference_for_single_image(model, image):
     return output_dict
 
 
-## main 부분
+""" main 파트 """
 def run_inference(model):
     fn = 0
     while True:
@@ -280,7 +265,8 @@ def run_inference(model):
             instance_masks=output_dict.get('detection_masks_reframed', None),
             use_normalized_coordinates=True,
             line_thickness=8)
-        ###
+
+
         global current_state
         global color
         ## get bounding box depth
@@ -291,7 +277,7 @@ def run_inference(model):
         global r_z
         boxes = np.squeeze(output_dict['detection_boxes'])
         scores = np.squeeze(output_dict['detection_scores'])
-        # set a min thresh score, say 0.8
+
         min_score_thresh = 0.5
         bboxes = boxes[scores > min_score_thresh]
         # get image size
@@ -331,7 +317,6 @@ def run_inference(model):
                 area = image_obj[int(y - (0.5 * height_length)): y + int(0.5 * height_length),
                        int(x - (0.5 * width_length)): x + int(0.5 * width_length)]
 
-                #cv2.imshow('area', area)
 
                 img = cv2.resize(area, (224, 224), interpolation=cv2.INTER_AREA)
                 img_tensor = image.img_to_array(img)  # Image data encoded as integers in the 0–255 range
@@ -375,7 +360,7 @@ def run_inference(model):
                     body_z = int(_depth[y * 512 + x])
                     array_x.append(x)
                     array_y.append(y)
-                    array_z.append(body_z)  # array의 필요성..?
+                    array_z.append(body_z)
                     # change to this!
             dif = body_z - weapon_z
             diff = abs(dif)
